@@ -20,7 +20,26 @@ app = dash.Dash(__name__,external_stylesheets=[dbc.themes.BOOTSTRAP])
 # ----------------- Get figures ----------------------------------
 start_address = ''
 
+def get_toasts( toastid):
+    toast = html.Div(
+        [
 
+            dbc.Toast(
+                "make sure the address is entered correctly",
+                id=toastid,
+                header="Wrong Address",
+                is_open=False,
+                dismissable=True,
+                icon="danger",
+                # top: 66 positions the toast below the navbar
+                style={"position": "fixed", "top": 66, "right": 10, "width": 350},
+            ),
+        ]
+    )
+    return toast
+
+left_toast = get_toasts("left_wrong_address_toast")
+right_toast = get_toasts("right_wrong_address_toast")
 # --------------------------------------------------------------------
 app.layout =html.Div(children = [
 
@@ -52,10 +71,30 @@ app.layout =html.Div(children = [
                                 # split to two columns
                                 dbc.Row(
                                     [
+                                        # address input area
                                         dbc.Col(
                                             children=[
-                                                dcc.Input(id="address1", type="text", value = start_address,placeholder="apartment address"
-                                                          , debounce=True,className="app__input"),
+                                                dbc.Row(
+                                                    [
+                                                        dbc.Col(dcc.Input(id="left_street_address", type="text",
+                                                                          value = start_address,placeholder="street address"
+                                                                        , debounce=False),width={"size": 3}),
+                                                        dbc.Col(dcc.Input(id="left_suburb_name", type="text",
+                                                                          value=start_address,
+                                                                          placeholder="suburb name"
+                                                                          , debounce=False, ),width={"size": 3} ),
+                                                        dbc.Col(dcc.Input(id="left_postcode", type="text",
+                                                                          value=start_address,
+                                                                          placeholder="postcode"
+                                                                          , debounce=False), width={"size": 3}),
+                                                        dbc.Col(dbc.Button("Search", disabled = True,color="primary", className="mr-1", id= "left_search"),width={"size": 3})
+
+                                                    ]
+                                                ),
+
+                                                # toast
+                                                left_toast,
+
 
                                                 # On market
                                                 html.H4("On Market Properties at"),
@@ -231,7 +270,7 @@ app.layout =html.Div(children = [
 @app.callback(
     Output("left_on_market_graph", "figure"),
     Output("left_on_market_table", "figure"),
-    Input("address1", "value"),
+    Input("left_on_market_title", "children"),
 )
 def left_update_on_market(address):
     if (address is None) or (address == ""):
@@ -241,20 +280,39 @@ def left_update_on_market(address):
 
 
 
+# this will also check and store the address
 @app.callback(
     Output("left_on_market_title", "children"),
     Output("left_history_title", "children"),
-    Input("address1", "value")
+    Output("left_wrong_address_toast", "is_open"),
+    Input("left_search", "n_clicks"),
+    Input("left_street_address", 'value'),
+    Input("left_postcode", "value"),
+    Input("left_suburb_name", "value")
 
 )
-def left_update_titles(address):
-    return  address,  address
+def left_update_titles(n_clicks,street_address, postcode,suburb_name):
+    ctx = dash.callback_context
+
+    if not ctx.triggered:
+        ele_id = 'No clicks yet'
+    else:
+        ele_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+    # if not button is clicked
+    if not ele_id == "left_search":
+        return "", "", False
+
+    address = search_check(street_address, suburb_name, postcode)
+    if address is None:
+        return "", "", True
+    return  address,  address, False
 
 
 @app.callback(
     Output("left_hist_trend_graph", "figure"),
     Output("left_price_change_table", "figure"),
-    Input("address1", "value"),
+    Input("left_on_market_title", "children"),
 )
 def left_update_hist_trend(address):
     if (address is None) or (address == ""):
@@ -273,12 +331,25 @@ def left_toggle_collapse(n, is_open):
     return is_open
 
 @app.callback(
+    Output("left_search", "disabled"),
+    Input("left_street_address", 'value'),
+    Input("left_postcode", "value"),
+    Input("left_suburb_name", "value")
+)
+def left_set_search_available(street, postcode, city):
+    if street.strip() == "" or postcode.strip() == "" or city.strip() == "":
+        return True
+    return False
+
+
+
+@app.callback(
     Output('specific_property_hist', 'figure'),
     Output('specific_property_hist', 'style'),
     Output('no_hist_text', 'style'),
     Output('hist_instruction_text', 'style'),
     Input('left_on_market_graph', 'clickData'),
-    Input("address1", "value"))
+    Input("left_on_market_title", "children"))
 def display_click_data(clickData, address):
     if clickData is None:
         return px.bar(), {'display': 'none'}, {'display': 'none'}, {'display': 'block'}

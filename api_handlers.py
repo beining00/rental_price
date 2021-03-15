@@ -29,6 +29,54 @@ def getHTMLText(url):
     except:
         return ""
 
+def search_check(street_address, suburb, postcode):
+    params = {
+        "terms":street_address +  " " + suburb + " " + postcode,
+        "pageSize" : 20,
+        "channel" : "Residential",
+    }
+
+    r = requests.get('https://api.domain.com.au/sandbox/v1/properties/_suggest', params = params, headers=headers)
+    assert (r.status_code == 200, "status_code wrong : check address")
+    jsonRes = r.json()
+    count_dict = {}
+    print(len(jsonRes))
+    for prop in jsonRes:
+        address = prop['address'].split("/")[1]
+        #print(address)
+        if postcode == prop['addressComponents']['postCode']:
+            if address not in count_dict:
+                count_dict[address] = 1
+            else:
+                count_dict[address] += 1
+
+    max_count =0
+    max_key = None
+    print(count_dict)
+    for key in list(count_dict.keys()):
+        if count_dict[key] > max_count:
+            max_key = key
+            max_count  = count_dict[key]
+
+    if (max_count < 10):
+        print("emmm, weired, address might be wrong ")
+        return None
+
+    search_address = max_key.replace(",", "").replace(" ", "-")
+    print(search_address)
+
+    # try access building profile
+    r = requests.get('https://www.domain.com.au/building-profile/' + search_address)
+    if r.status_code  != 200:
+        return None
+
+    return search_address
+
+
+
+
+
+
 
 def get_property_rent_history(address):
     raw_html = getHTMLText(
@@ -331,7 +379,7 @@ def get_on_market_plots(address):
 
 
 def timeline_plot(room_no,address, current_price, cur_up_days,cur_agency):
-    prop_url = 'https://www.domain.com.au/property-profile/' + str(room_no) + "-" + address
+    prop_url = 'https://www.domain.com.au/property-profile/' + str(room_no) + "-" + address.lower()
     print(prop_url)
     raw_html = getHTMLText(prop_url)
     soup = BeautifulSoup(raw_html, 'html.parser')
