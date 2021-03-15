@@ -12,6 +12,7 @@ from api_handlers import *
 import json
 
 
+
 #external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
 app = dash.Dash(__name__,external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -78,7 +79,10 @@ app.layout =html.Div(children = [
                                                             color="primary",
                                                         ),
                                                         dbc.Collapse(dbc.Card(dbc.CardBody([
-
+                                                                            html.Span("No history to show", id = "no_hist_text"),
+                                                                            html.Span("Click on the dots in <b>the On-market graph<\b> to "
+                                                                                      "see the renting history of a specific property",
+                                                                                      id = "hist_instruction_text"),
                                                                            # current listing
                                                                            dcc.Graph(
                                                                                id='specific_property_hist',
@@ -89,7 +93,7 @@ app.layout =html.Div(children = [
 
                                                                            ])),
                                                             id="left_collapse",
-                                                            className = "collapse_content"
+                                                            #className = "collapse_content"
                                                         ),
                                                     ]
                                                 ),
@@ -270,14 +274,25 @@ def left_toggle_collapse(n, is_open):
 
 @app.callback(
     Output('specific_property_hist', 'figure'),
+    Output('specific_property_hist', 'style'),
+    Output('no_hist_text', 'style'),
+    Output('hist_instruction_text', 'style'),
     Input('left_on_market_graph', 'clickData'),
     Input("address1", "value"))
 def display_click_data(clickData, address):
     if clickData is None:
-        return px.bar()
+        return px.bar(), {'display': 'none'}, {'display': 'none'}, {'display': 'block'}
+    #plot_figure  = timeline_plot("3201",'27-therry-street-melbourne-vic-3000', 620, 11,'14955899')
+    data_dict = clickData["points"][0]
     print(json.dumps(clickData, indent=2))
-    data_dict= clickData["points"][0]
-    return timeline_plot(data_dict["customdata"][0], address, data_dict["y"], data_dict["customdata"][2], "agency_placeholder")
+    plot_figure = timeline_plot(data_dict["customdata"][0], address, data_dict["y"], data_dict["customdata"][2],
+                  "agency_placeholder")
+    if plot_figure is None:
+        return px.bar(), {'display': 'none'}, {'display': 'block'},{'display': 'none'}
+    else:
+        return plot_figure, {'display': 'block'}, {'display': 'none'},{'display': 'none'}
+
+
 
 # ----------- right Callbacks ---------------------------
 @app.callback(
@@ -288,8 +303,8 @@ def display_click_data(clickData, address):
 def right_update_on_market(address):
     if (address is None) or (address == ""):
         return px.bar(),px.bar()
-    return px.bar(),px.bar() # TOBE comment out
-    #return get_on_market_plots(address)
+    #return px.bar(),px.bar() # TOBE comment out
+    return get_on_market_plots(address)
 
 
 

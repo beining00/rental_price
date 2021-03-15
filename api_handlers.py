@@ -4,12 +4,10 @@ import re
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import OneHotEncoder
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from datetime import date
 import plotly.figure_factory as ff
+from mockingResponse import *
 
 
 # define global vars
@@ -205,6 +203,7 @@ def get_percentage_price_change_table(hist_df, group_col, price_col,split_on = '
     return fig
 
 
+#@mock.patch('requests.get', side_effect=mocked_requests_get)
 def get_on_market_plots(address):
     #  ----------- get a list of listing id for on market listing -----------
     page_no = 1
@@ -268,7 +267,7 @@ def get_on_market_plots(address):
 
                                                 }, ignore_index=True)
         else:
-            print("status code: " + list_res.status_code)
+            print("status code: " + str(list_res.status_code))
     #print(requests_count)
 
     # ----------- data cleaning   --------------------------------
@@ -333,16 +332,26 @@ def get_on_market_plots(address):
 
 def timeline_plot(room_no,address, current_price, cur_up_days,cur_agency):
     prop_url = 'https://www.domain.com.au/property-profile/' + str(room_no) + "-" + address
+    print(prop_url)
     raw_html = getHTMLText(prop_url)
     soup = BeautifulSoup(raw_html, 'html.parser')
     # print(soup)
     list_tags = soup.find_all(class_="css-m3i618")
-    timeline_df = pd.DataFrame(columns=["Date", "Price", "days", "Type", "Agency"])
+    timeline_df = pd.DataFrame(columns=["Date", "Price","raw_price", "days", "Type", "Agency"])
     # for each record
+    if len(list_tags) == 0:
+        print("wrong url " + prop_url)
+        return None
+
     for hist in list_tags[0].find_all(class_="css-16ezjtx"):
-        temp = hist.find_all(class_='css-zwto9f')
-        if len(temp) == 1:
-            continue
+        #print(hist.prettify())
+
+        agency = hist.find(class_='css-1b9tx6v')
+        if agency is None:
+            agency = None
+        else:
+            agency = agency.text
+
         # this_type = hist.find(class_='css-bl2deh')
         # if this_type is None:
         #     this_type = hist.find(class_='css-jcs3kb').text
@@ -353,19 +362,24 @@ def timeline_plot(room_no,address, current_price, cur_up_days,cur_agency):
             "Date": hist.find(class_='css-vajoca').text + hist.find(class_='css-1qi20sy').text,
             "Price": hist.find(class_='css-6xjfcu').text + hist.find(class_='css-obiveq').text,
             "raw_price":  hist.find(class_='css-6xjfcu').text[1:],
-            "Type": hist.find(class_='css-bl2deh').text,
-            "days": temp[1].text,
-            "Agency": temp[0].text
+            "Type": hist.find(class_='css-1oi8ih3').text,
+            "days": hist.find(class_='css-zwto9f').text,
+            "Agency": agency
 
         },
             ignore_index=True)
 
     print(timeline_df)
+    if (len(timeline_df) == 0):
+        return None
 
     timeline_df["date_date"] = pd.to_datetime(timeline_df["Date"], format="%b%Y")
 
     def convert_num_price(p):
         # some weekly price are monthly price
+        if p[-1] == 'k' or p[-1] == 'K':
+            price_num = int(p[:-1].replace(',', ''))
+            return price_num * 1000
         price_num = int(p.replace(',', ''))
         if price_num > weekly_price_threshold:
             # this is a monthly price
@@ -376,38 +390,57 @@ def timeline_plot(room_no,address, current_price, cur_up_days,cur_agency):
 
     timeline_df["price_num"] = timeline_df["raw_price"].map(convert_num_price)
 
-    timeline_df["description"] = "<b>" + timeline_df["price_num"].astype(int).astype(str) + "</b> per week<br>Listed for <b>" + \
+    timeline_df["description"] = "<b>$" + timeline_df["price_num"].astype(int).astype(str) + "</b> per week<br>Listed for <b>" + \
                              timeline_df["days"] + " </b>days<br>by " + timeline_df["Agency"]
 
-
+    # get the rent hist
+    df = timeline_df[timeline_df.Type == "Listed by"]
+    if len(df) ==0:
+        return None
+    df['marker_color'] = "blue"
 
 
     # TODO add the current list
-    timeline_df = timeline_df.append({
+    df = df.append({
         "date_date":pd.to_datetime('today') ,
         "price_num": current_price,
-        "Type": "ON-MARKET",
+        "Type": "Listed by",
         "days": str(cur_up_days),
-        "Agency": cur_agency
+        "Agency": cur_agency,
+        "description" : "current listing",
+        "marker_color" : 'red',
 
     },
         ignore_index=True)
 
 
     # plot ------
-    fig = go.Figure(data=go.Scatter(x=timeline_df['date_date'],
-                                    y=timeline_df["price_num"],
+    fig = go.Figure(data=go.Scatter(x=df['date_date'],
+                                    y=df["price_num"],
                                     mode="lines+text+markers",
-                                    text=timeline_df["description"],
+                                    text=df["description"],
                                     textposition="top center",
-                                    textfont={'family': "Times", 'size': 20},
-                                    marker=dict(size=15)
+                                    textfont={'family': "Times", 'size': 13},
+                                    marker=dict(size=8, color = df["marker_color"])
                                     ),
+                    layout = go.Layout(margin=dict(t=22, b= 1, r=0,l=0))
                     )
 
     # TODO make xaxis-range dynamic
     # TODO make yaxis-range fix with min, max price
-    fig.update_layout(yaxis_range=[timeline_df.price_num.min() * 0.7, timeline_df.price_num.max() * 1.5], xaxis_range=['2017-01-01', '2021-06-08'])
+    time_range = df.date_date.max() - df.date_date.min()
+    fig.update_layout(yaxis_range=[df.price_num.min() * 0.7, df.price_num.max() * 1.5],
+                      xaxis_range=[df.date_date.min() - time_range/4,  df.date_date.max() + time_range/4])
+
+    fig.update_layout(
+        title='Rent History of Room ' + str(room_no),
+        xaxis_title="Time",
+        yaxis_title="Weekly Rental Price ($)",
+        font=dict(
+            family="Courier New, monospace",
+            color="RebeccaPurple"
+        )
+    )
 
     return fig
 
