@@ -37,7 +37,7 @@ def search_check(street_address, suburb, postcode):
     }
 
     r = requests.get('https://api.domain.com.au/sandbox/v1/properties/_suggest', params = params, headers=headers)
-    assert (r.status_code == 200, "status_code wrong : check address")
+    assert r.status_code == 200, "status_code wrong : check address"
     jsonRes = r.json()
     count_dict = {}
     print(len(jsonRes))
@@ -328,10 +328,10 @@ def get_on_market_plots(address):
     on_market_df[ "room_type"] = on_market_df['bed'].astype(int).astype(str) + "b" + on_market_df['bath'].astype(int).astype(str) + "b"
     #print(on_market_df["up_days"])
     # ------------ strip Plot ---------------------------------
-    fig0 = px.strip(on_market_df[on_market_df.price.notna()], x="room_type", y="price", hover_data=['up_days', 'list_id'],
+    fig0 = px.strip(on_market_df[on_market_df.price.notna()], x="room_type", y="price", hover_data=['up_days', 'list_id', "room_no"],
                     color="room_type",custom_data=["room_no", "agency_id","up_days", "list_id"])
     fig0.update_layout(showlegend=False,clickmode='event+select')
-
+    fig0.update_traces(marker=dict(size=8))
 
     # -------------- info table ----------------------------------
     table_data = [['room<br>type', 'on market<br>count', 'median<br>price(pw)', 'lowest<br>price', "highest<br>price",
@@ -406,10 +406,16 @@ def timeline_plot(room_no,address, current_price, cur_up_days,cur_agency):
         # else:
         #     this_type = this_type.text
 
+        # in case the raw price is not shown
+        raw_price = hist.find(class_='css-6xjfcu')
+        if raw_price is None:
+            raw_price = None
+        else:
+            raw_price = raw_price.text[1:]
+        # --------- add data to the dataframe ------------
         timeline_df = timeline_df.append({
             "Date": hist.find(class_='css-vajoca').text + hist.find(class_='css-1qi20sy').text,
-            "Price": hist.find(class_='css-6xjfcu').text + hist.find(class_='css-obiveq').text,
-            "raw_price":  hist.find(class_='css-6xjfcu').text[1:],
+            "raw_price": raw_price,
             "Type": hist.find(class_='css-1oi8ih3').text,
             "days": hist.find(class_='css-zwto9f').text,
             "Agency": agency
@@ -425,21 +431,22 @@ def timeline_plot(room_no,address, current_price, cur_up_days,cur_agency):
 
     def convert_num_price(p):
         # some weekly price are monthly price
-        if p[-1] == 'k' or p[-1] == 'K':
-            price_num = int(p[:-1].replace(',', ''))
-            return price_num * 1000
-        price_num = int(p.replace(',', ''))
-        if price_num > weekly_price_threshold:
-            # this is a monthly price
-            price_num = int(price_num/30 * 7)
-        return price_num
+        if p is not None:
+            if p[-1] == 'k' or p[-1] == 'K':
+                price_num = int(float(p[:-1].replace(',', '')))
+                return price_num * 1000
+            price_num = int(float(p.replace(',', '')))
+            if price_num > weekly_price_threshold:
+                # this is a monthly price
+                price_num = int(price_num/30 * 7)
+            return price_num
+        else:
+            return None
 
 
 
-    timeline_df["price_num"] = timeline_df["raw_price"].map(convert_num_price)
+    timeline_df["price_num"] = timeline_df['raw_price'].map(convert_num_price)
 
-    timeline_df["description"] = "<b>$" + timeline_df["price_num"].astype(int).astype(str) + "</b> per week<br>Listed for <b>" + \
-                             timeline_df["days"] + " </b>days<br>by " + timeline_df["Agency"]
 
     # get the rent hist
     df = timeline_df[timeline_df.Type == "Listed by"]
@@ -447,8 +454,10 @@ def timeline_plot(room_no,address, current_price, cur_up_days,cur_agency):
         return None
     df['marker_color'] = "blue"
 
+    # reverse the order to oldest -> newest
+    df = df.iloc[::-1]
 
-    # TODO add the current list
+    #  add the current list
     df = df.append({
         "date_date":pd.to_datetime('today') ,
         "price_num": current_price,
@@ -461,8 +470,29 @@ def timeline_plot(room_no,address, current_price, cur_up_days,cur_agency):
     },
         ignore_index=True)
 
+    # marker symbol ----------
+    df['marker_symbol'] = 'circle'
 
-    # plot ------
+    # deal with none price
+    print(df)
+    def none_price(row):
+        if pd.isna(row.price_num):
+
+            row.price_num = 500 # hardcore price
+
+            row['description'] = "<b>unknown price</b><br>Listed for <b>" + \
+                                         row["days"] + " </b>days<br>by " + row["Agency"]
+            row.marker_symbol = 'circle-open'
+        else:
+            row = row.fillna("Unknown")
+            row["description"] = "<b>$" + str(int(row["price_num"])) + "</b> per week<br>Listed for <b>" + row["days"] + " </b>days<br>by " + row["Agency"]
+        return row
+
+    df = df.apply(none_price, axis = 'columns')
+
+
+
+            # plot ------
     fig = go.Figure(data=go.Scatter(x=df['date_date'],
                                     y=df["price_num"],
                                     mode="lines+text+markers",
@@ -471,7 +501,7 @@ def timeline_plot(room_no,address, current_price, cur_up_days,cur_agency):
                                     textfont={'family': "Times", 'size': 13},
                                     marker=dict(size=8, color = df["marker_color"])
                                     ),
-                    layout = go.Layout(margin=dict(t=22, b= 1, r=0,l=0))
+                    layout = go.Layout(margin=dict(t=30, b= 1, r=0,l=0))
                     )
 
     # TODO make xaxis-range dynamic
@@ -481,7 +511,7 @@ def timeline_plot(room_no,address, current_price, cur_up_days,cur_agency):
                       xaxis_range=[df.date_date.min() - time_range/4,  df.date_date.max() + time_range/4])
 
     fig.update_layout(
-        title='Rent History of Room ' + str(room_no),
+        title='Rent History of Room ' + str(room_no) ,
         xaxis_title="Time",
         yaxis_title="Weekly Rental Price ($)",
         font=dict(

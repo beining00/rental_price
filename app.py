@@ -119,7 +119,10 @@ app.layout =html.Div(children = [
                                                         ),
                                                         dbc.Collapse(dbc.Card(dbc.CardBody([
                                                                             html.Span("No history to show", id = "no_hist_text"),
-                                                                            html.Span("Click on the dots in <b>the On-market graph<\b> to "
+                                                                            html.Br(),
+
+
+                                                                            html.Span("Click on the dots in the ON-MARKET graph to "
                                                                                       "see the renting history of a specific property",
                                                                                       id = "hist_instruction_text"),
                                                                            # current listing
@@ -127,6 +130,7 @@ app.layout =html.Div(children = [
                                                                                id='specific_property_hist',
                                                                                className="small_graph",
                                                                            ),
+                                                                            html.Span("", id= "property_url"),
 
 
 
@@ -348,20 +352,24 @@ def left_set_search_available(street, postcode, city):
     Output('specific_property_hist', 'style'),
     Output('no_hist_text', 'style'),
     Output('hist_instruction_text', 'style'),
+    Output('property_url', 'children'),
     Input('left_on_market_graph', 'clickData'),
     Input("left_on_market_title", "children"))
 def display_click_data(clickData, address):
     if clickData is None:
-        return px.bar(), {'display': 'none'}, {'display': 'none'}, {'display': 'block'}
+        return px.bar(), {'display': 'none'}, {'display': 'none'},{'display': 'block'}, ""
     #plot_figure  = timeline_plot("3201",'27-therry-street-melbourne-vic-3000', 620, 11,'14955899')
     data_dict = clickData["points"][0]
     print(json.dumps(clickData, indent=2))
-    plot_figure = timeline_plot(data_dict["customdata"][0], address, data_dict["y"], data_dict["customdata"][2],
+    plot_figure = timeline_plot(data_dict["customdata"][0], address,data_dict["y"], data_dict["customdata"][2],
                   "agency_placeholder")
+    text = 'property url : https://www.domain.com.au/property-profile/' + str(
+        data_dict["customdata"][0]) + "-" + address.lower()
     if plot_figure is None:
-        return px.bar(), {'display': 'none'}, {'display': 'block'},{'display': 'none'}
+
+        return px.bar(), {'display': 'none'}, {'display': 'block'},{'display': 'none'}, text
     else:
-        return plot_figure, {'display': 'block'}, {'display': 'none'},{'display': 'none'}
+        return plot_figure, {'display': 'block'}, {'display': 'none'},{'display': 'none'}, text
 
 
 
