@@ -41,8 +41,15 @@ def search_check(street_address, suburb, postcode):
     jsonRes = r.json()
     count_dict = {}
     print(len(jsonRes))
+
     for prop in jsonRes:
-        address = prop['address'].split("/")[1]
+        #print(prop)
+        room_address = prop['address'].split("/")
+        if len(room_address) < 2:
+            # wrong address
+            continue
+        else:
+            address = room_address[1]
         #print(address)
         if postcode == prop['addressComponents']['postCode']:
             if address not in count_dict:
@@ -52,7 +59,7 @@ def search_check(street_address, suburb, postcode):
 
     max_count =0
     max_key = None
-    print(count_dict)
+    #print(count_dict)
     for key in list(count_dict.keys()):
         if count_dict[key] > max_count:
             max_key = key
