@@ -51,9 +51,9 @@ p {
 
 }
 
-.app__input {
+.input_field {
     padding: 15px;
-    width : 90%;
+    width : 100%;
     margin: 20px;
     justify-content: center;
 }

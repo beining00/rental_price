@@ -334,11 +334,39 @@ def get_on_market_plots(address):
     on_market_df[ "up_days"] = on_market_df["list_date"].map(lambda p: (date.today() - p.date()).days)
     on_market_df[ "room_type"] = on_market_df['bed'].astype(int).astype(str) + "b" + on_market_df['bath'].astype(int).astype(str) + "b"
     #print(on_market_df["up_days"])
+    # ---------------Agency Pie Plot --------------------------------
+
+    unique_agency_df= pd.DataFrame(on_market_df.agency_id.value_counts()).reset_index().rename(columns={'agency_id':'no_appear', 'index':"id"})
+    print(on_market_df)
+    # get agency names
+    def get_agency_name(row):
+        agency_id = row.id
+        agency_url = 'https://api.domain.com.au/sandbox/v1/agencies/'
+        res = requests.get(agency_url + str(agency_id), headers=headers)
+        if (res.status_code == 200):
+            res= res.json()
+            row['agency_name'] = res['name']
+        else:
+            print("status code: " + str(res.status_code))
+            row['agency_name'] = "unknown"
+        return row
+
+    unique_agency_df = unique_agency_df.apply(get_agency_name, axis = 'columns')
+
+    # start to plot
+
+    fig2 = px.pie(unique_agency_df, values='no_appear', names='agency_name',
+                 title='Agency distribution of on-market properties')
+    fig2.update_traces(textposition='inside', textinfo='percent+label')
+
+
+
     # ------------ strip Plot ---------------------------------
     fig0 = px.strip(on_market_df[on_market_df.price.notna()], x="room_type", y="price", hover_data=['up_days', 'list_id', "room_no"],
                     color="room_type",custom_data=["room_no", "agency_id","up_days", "list_id"])
     fig0.update_layout(showlegend=False,clickmode='event+select')
     fig0.update_traces(marker=dict(size=8))
+
 
     # -------------- info table ----------------------------------
     table_data = [['room<br>type', 'on market<br>count', 'median<br>price(pw)', 'lowest<br>price', "highest<br>price",
@@ -381,7 +409,14 @@ def get_on_market_plots(address):
             color="RebeccaPurple"
         )
     )
-    return fig0, fig
+    fig2.update_layout(
+        font=dict(
+            family="Courier New, monospace",
+            size=14,
+            color="RebeccaPurple"
+        )
+    )
+    return fig0, fig, fig2
 
 
 

@@ -45,7 +45,7 @@ right_toast = get_toasts("right_wrong_address_toast")
 
 # ----------------- Get input fields ----------------------------------
 def get_input_fields(id_preffix):
-    input_fields = dbc.Row(
+    input_fields = html.Div(dbc.Row(
         [
             dbc.Col(dcc.Input(id= id_preffix + "_street_address", type="text",
                               value=start_address, placeholder="street address"
@@ -62,7 +62,7 @@ def get_input_fields(id_preffix):
                     width={"size": 3})
 
         ]
-    )
+    ), className="input_field")
     return input_fields
 
 left_input_field = get_input_fields("left")
@@ -168,6 +168,13 @@ app.layout =html.Div(children = [
 
                                                 ),
 
+                                                # agency pie
+                                                dcc.Graph(
+                                                    id='left_agency_pie',
+                                                    className="graph",
+
+                                                ),
+
                                                 # Rent History
                                                 html.H4("Properties Renting History at"),
                                                 html.H5(id = "left_history_title"),
@@ -231,6 +238,17 @@ app.layout =html.Div(children = [
 
                                                 ),
 
+                                                # agency pie
+                                                dcc.Graph(
+                                                    id='right_agency_pie',
+                                                    className="graph",
+
+                                                ),
+
+
+
+
+
                                                 # Rent History
                                                 html.H4("Properties Renting History at"),
                                                 html.H5(id = "right_history_title"),
@@ -276,11 +294,12 @@ app.layout =html.Div(children = [
 @app.callback(
     Output("left_on_market_graph", "figure"),
     Output("left_on_market_table", "figure"),
+    Output("left_agency_pie", "figure"),
     Input("left_on_market_title", "children"),
 )
 def left_update_on_market(address):
     if (address is None) or (address == ""):
-        return px.bar(),px.bar()
+        return px.bar(),px.bar(), px.bar()
     #return px.bar(),px.bar() # TOBE comment out
     return get_on_market_plots(address)
 
@@ -379,11 +398,12 @@ def left_display_click_data(clickData, address):
 @app.callback(
     Output("right_on_market_graph", "figure"),
     Output("right_on_market_table", "figure"),
+    Output("right_agency_pie", 'figure'),
     Input("right_on_market_title", "children"),
 )
 def right_update_on_market(address):
     if (address is None) or (address == ""):
-        return px.bar(),px.bar()
+        return px.bar(),px.bar(), px.bar()
     #return px.bar(),px.bar() # TOBE comment out
     return get_on_market_plots(address)
 
